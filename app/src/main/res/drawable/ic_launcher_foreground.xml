@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    
+    <!-- Outer glow for Teal ring -->
+    <group android:pivotX="54" android:pivotY="54" android:rotation="45">
+        <path
+            android:strokeColor="#4D00E5FF"
+            android:strokeWidth="7"
+            android:pathData="M 20,54 A 34,12 0 1,0 88,54 A 34,12 0 1,0 20,54 Z" />
+        <path
+            android:strokeColor="#00E5FF"
+            android:strokeWidth="3.5"
+            android:pathData="M 20,54 A 34,12 0 1,0 88,54 A 34,12 0 1,0 20,54 Z" />
+    </group>
+
+    <!-- Outer glow for Orange ring -->
+    <group android:pivotX="54" android:pivotY="54" android:rotation="-45">
+        <path
+            android:strokeColor="#4DFF9800"
+            android:strokeWidth="7"
+            android:pathData="M 20,54 A 34,12 0 1,0 88,54 A 34,12 0 1,0 20,54 Z" />
+        <path
+            android:strokeColor="#FF9800"
+            android:strokeWidth="3.5"
+            android:pathData="M 20,54 A 34,12 0 1,0 88,54 A 34,12 0 1,0 20,54 Z" />
+    </group>
+
+    <!-- Core with glow -->
+    <path
+        android:fillColor="#4DFFFFFF"
+        android:pathData="M 44,54 A 10,10 0 1,0 64,54 A 10,10 0 1,0 44,54 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 47,54 A 7,7 0 1,0 61,54 A 7,7 0 1,0 47,54 Z" />
+</vector>

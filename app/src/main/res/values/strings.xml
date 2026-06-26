@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Atomic Reminder</string>
+    <string name="accessibility_service_description">Used to block distracting applications during focus sessions.</string>
+</resources>
