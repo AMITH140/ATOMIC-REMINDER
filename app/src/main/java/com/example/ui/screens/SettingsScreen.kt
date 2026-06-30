@@ -19,7 +19,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import com.example.ui.components.LiquidGlassButton
+import com.example.ui.components.liquidGlass
 import com.example.ui.theme.*
+import androidx.compose.ui.graphics.Color
 
 import androidx.compose.runtime.*
 
@@ -29,10 +32,10 @@ fun SettingsScreen() {
     val habitState = com.example.ui.state.LocalHabitState.current
     val userProfile = com.example.ui.state.LocalUserProfile.current
     var showWaterGoalDialog by remember { mutableStateOf(false) }
-    var waterInterval by remember { mutableStateOf(habitState.waterIntervalMins.intValue.toString()) }
+    var waterInterval by remember(habitState.waterIntervalMins.intValue) { mutableStateOf(habitState.waterIntervalMins.intValue.toString()) }
 
     var showMovementGoalDialog by remember { mutableStateOf(false) }
-    var movementBreakInterval by remember { mutableStateOf(habitState.movementIntervalMins.intValue.toString()) }
+    var movementBreakInterval by remember(habitState.sedentaryMinutes.intValue) { mutableStateOf(habitState.sedentaryMinutes.intValue.toString()) }
 
     var showEditProfileDialog by remember { mutableStateOf(false) }
     var editName by remember { mutableStateOf(userProfile.value.name) }
@@ -75,7 +78,7 @@ fun SettingsScreen() {
                 }
             },
             confirmButton = {
-                Button(onClick = { 
+                LiquidGlassButton(onClick = { 
                     userProfile.value = userProfile.value.copy(name = editName, email = editEmail)
                     showEditProfileDialog = false 
                 }) {
@@ -91,19 +94,76 @@ fun SettingsScreen() {
     }
 
     if (showWaterGoalDialog) {
+        val prefs = context.getSharedPreferences("app_prefs", android.content.Context.MODE_PRIVATE)
         AlertDialog(
             onDismissRequest = { showWaterGoalDialog = false },
-            title = { Text("Water Reminder Interval") },
+            title = { Text("Water Reminder") },
             text = {
-                OutlinedTextField(
-                    value = waterInterval,
-                    onValueChange = { waterInterval = it },
-                    label = { Text("Interval (minutes)") },
-                    modifier = Modifier.fillMaxWidth()
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    OutlinedTextField(
+                        value = waterInterval,
+                        onValueChange = { waterInterval = it },
+                        label = { Text("Interval (minutes)") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Start Time", style = MaterialTheme.typography.bodyLarge)
+                        Surface(
+                            modifier = Modifier.clickable {
+                                android.app.TimePickerDialog(context, { _, hour, min ->
+                                    val amPm = if (hour >= 12) "PM" else "AM"
+                                    val formattedHour = if (hour % 12 == 0) 12 else hour % 12
+                                    val formattedMin = String.format(java.util.Locale.US, "%02d", min)
+                                    val formattedTime = String.format(java.util.Locale.US, "%02d:%s %s", formattedHour, formattedMin, amPm)
+                                    habitState.waterStartTime.value = formattedTime
+                                    habitState.saveWaterTimes(prefs)
+                                }, 8, 0, false).show()
+                            },
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant
+                        ) {
+                            Text(
+                                text = habitState.waterStartTime.value,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                        }
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("End Time", style = MaterialTheme.typography.bodyLarge)
+                        Surface(
+                            modifier = Modifier.clickable {
+                                android.app.TimePickerDialog(context, { _, hour, min ->
+                                    val amPm = if (hour >= 12) "PM" else "AM"
+                                    val formattedHour = if (hour % 12 == 0) 12 else hour % 12
+                                    val formattedMin = String.format(java.util.Locale.US, "%02d", min)
+                                    val formattedTime = String.format(java.util.Locale.US, "%02d:%s %s", formattedHour, formattedMin, amPm)
+                                    habitState.waterEndTime.value = formattedTime
+                                    habitState.saveWaterTimes(prefs)
+                                }, 22, 0, false).show()
+                            },
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant
+                        ) {
+                            Text(
+                                text = habitState.waterEndTime.value,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                        }
+                    }
+                }
             },
             confirmButton = {
-                Button(onClick = { 
+                LiquidGlassButton(onClick = { 
                     waterInterval.toIntOrNull()?.let { 
                         habitState.waterIntervalMins.intValue = it 
                         com.example.util.NotificationHelper.scheduleReminder(
@@ -140,9 +200,9 @@ fun SettingsScreen() {
                 )
             },
             confirmButton = {
-                Button(onClick = { 
+                LiquidGlassButton(onClick = { 
                     movementBreakInterval.toIntOrNull()?.let { 
-                        habitState.movementIntervalMins.intValue = it 
+                        habitState.sedentaryMinutes.intValue = it 
                         com.example.util.NotificationHelper.scheduleReminder(
                             context,
                             id = 2,
@@ -266,14 +326,14 @@ fun SettingsScreen() {
                         }
                         Column {
                             Text("Atomic Premium", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-                            Text("3 days remaining", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f))
+                            Text("${habitState.premiumDaysRemaining.intValue} days remaining", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f))
                         }
                     }
                     Spacer(modifier = Modifier.height(16.dp))
                     Surface(
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
-                        shape = RoundedCornerShape(50),
-                        modifier = Modifier.align(Alignment.CenterHorizontally)
+                        modifier = Modifier.align(Alignment.CenterHorizontally).liquidGlass(RoundedCornerShape(50)),
+                        color = Color.Transparent,
+                        shape = RoundedCornerShape(50)
                     ) {
                         Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text("Earn more", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
@@ -300,13 +360,81 @@ fun SettingsScreen() {
                 SettingsItem(
                     icon = Icons.AutoMirrored.Outlined.DirectionsRun, 
                     title = "Movement reminders", 
-                    subtitle = "Every ${habitState.movementIntervalMins.intValue} mins",
+                    subtitle = "Every ${habitState.sedentaryMinutes.intValue} mins",
                     iconTint = MaterialTheme.colorScheme.primary, 
                     iconBg = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
                     onClick = { showMovementGoalDialog = true }
                 )
                 SettingsDivider()
-                SettingsItem(icon = Icons.Outlined.Alarm, title = "Morning alarm", iconTint = MaterialTheme.colorScheme.secondaryContainer, iconBg = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.2f))
+                SettingsToggleItem(
+                    icon = Icons.Outlined.CheckCircle,
+                    title = "Daily habits summary",
+                    subtitle = "Morning outline of your habits",
+                    iconTint = MaterialTheme.colorScheme.tertiary,
+                    iconBg = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.1f),
+                    checked = habitState.habitsSummaryEnabled.value,
+                    onCheckedChange = { 
+                        habitState.habitsSummaryEnabled.value = it
+                        val prefs = context.getSharedPreferences("app_prefs", android.content.Context.MODE_PRIVATE)
+                        habitState.saveSummarySettings(prefs)
+                        if (it) {
+                            com.example.util.NotificationHelper.scheduleDailySummary(context, 100, "habits", habitState.summaryTime.value)
+                        } else {
+                            com.example.util.NotificationHelper.cancelReminder(context, 100)
+                        }
+                    }
+                )
+                SettingsDivider()
+                SettingsToggleItem(
+                    icon = Icons.Outlined.Checklist,
+                    title = "Daily to-dos summary",
+                    subtitle = "Morning outline of your tasks",
+                    iconTint = MaterialTheme.colorScheme.secondaryContainer,
+                    iconBg = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.2f),
+                    checked = habitState.todosSummaryEnabled.value,
+                    onCheckedChange = { 
+                        habitState.todosSummaryEnabled.value = it
+                        val prefs = context.getSharedPreferences("app_prefs", android.content.Context.MODE_PRIVATE)
+                        habitState.saveSummarySettings(prefs)
+                        if (it) {
+                            com.example.util.NotificationHelper.scheduleDailySummary(context, 101, "todos", habitState.summaryTime.value)
+                        } else {
+                            com.example.util.NotificationHelper.cancelReminder(context, 101)
+                        }
+                    }
+                )
+                SettingsDivider()
+                
+                var showSummaryTimeDialog by remember { mutableStateOf(false) }
+                if (showSummaryTimeDialog) {
+                    android.app.TimePickerDialog(context, { _, hour, min ->
+                        val amPm = if (hour >= 12) "PM" else "AM"
+                        val formattedHour = if (hour % 12 == 0) 12 else hour % 12
+                        val formattedMin = String.format(java.util.Locale.US, "%02d", min)
+                        val formattedTime = String.format(java.util.Locale.US, "%02d:%s %s", formattedHour, formattedMin, amPm)
+                        habitState.summaryTime.value = formattedTime
+                        val prefs = context.getSharedPreferences("app_prefs", android.content.Context.MODE_PRIVATE)
+                        habitState.saveSummarySettings(prefs)
+                        if (habitState.habitsSummaryEnabled.value) {
+                            com.example.util.NotificationHelper.scheduleDailySummary(context, 100, "habits", formattedTime)
+                        }
+                        if (habitState.todosSummaryEnabled.value) {
+                            com.example.util.NotificationHelper.scheduleDailySummary(context, 101, "todos", formattedTime)
+                        }
+                        showSummaryTimeDialog = false
+                    }, 8, 0, false).apply {
+                        setOnDismissListener { showSummaryTimeDialog = false }
+                    }.show()
+                }
+                
+                SettingsItem(
+                    icon = Icons.Outlined.Alarm, 
+                    title = "Morning summary time", 
+                    subtitle = habitState.summaryTime.value,
+                    iconTint = MaterialTheme.colorScheme.secondaryContainer, 
+                    iconBg = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.2f),
+                    onClick = { showSummaryTimeDialog = true }
+                )
             }
         }
 
@@ -324,6 +452,17 @@ fun SettingsScreen() {
             SettingsSection(title = "ABOUT") {
                 SettingsItemTextValue(title = "Version", value = "2.4.1")
                 SettingsDivider()
+                
+                val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+                SettingsItem(
+                    title = "Request a Feature", 
+                    icon = Icons.AutoMirrored.Outlined.OpenInNew, 
+                    isTrailingIcon = true, 
+                    showChevron = false,
+                    onClick = { uriHandler.openUri("https://tally.so/r/1AxMAb") }
+                )
+                SettingsDivider()
+                
                 SettingsItem(title = "Privacy policy", icon = Icons.AutoMirrored.Outlined.OpenInNew, isTrailingIcon = true, showChevron = false)
                 SettingsDivider()
                 SettingsItem(title = "Rate Atomic Reminder", icon = Icons.Outlined.StarRate, isTrailingIcon = true, showChevron = false, trailingIconTint = MaterialTheme.colorScheme.secondaryContainer)
@@ -414,6 +553,49 @@ fun SettingsItemTextValue(title: String, value: String) {
     ) {
         Text(title, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
         Text(value, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+fun SettingsToggleItem(
+    icon: ImageVector? = null,
+    title: String,
+    subtitle: String? = null,
+    iconTint: androidx.compose.ui.graphics.Color? = null,
+    iconBg: androidx.compose.ui.graphics.Color? = null,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onCheckedChange(!checked) }
+            .padding(16.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            if (icon != null) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .background(iconBg ?: MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(icon, contentDescription = null, tint = iconTint ?: MaterialTheme.colorScheme.outline)
+                }
+            }
+            Column {
+                Text(title, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+                if (subtitle != null) {
+                    Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange
+        )
     }
 }
 

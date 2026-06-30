@@ -132,7 +132,7 @@ fun MovementScreen(onNavigateBack: () -> Unit) {
                         Box(modifier = Modifier.width(1.dp).height(40.dp).background(MaterialTheme.colorScheme.outlineVariant))
                         Column(horizontalAlignment = Alignment.End) {
                             Text("Comparison", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            val todayBreaks = if (habitState.lastBreakMins.intValue == 0) 1 else 0 // Dummy calculation
+                            val todayBreaks = habitState.movementHistory.value.size // Actual calculation
                             val diff = todayBreaks - 5
                             Text(
                                 text = if (diff >= 0) "+$diff breaks" else "$diff breaks",
@@ -140,6 +140,53 @@ fun MovementScreen(onNavigateBack: () -> Unit) {
                                 color = if (diff >= 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
                                 fontWeight = FontWeight.Bold
                             )
+                        }
+                    }
+                }
+            }
+
+            item { Spacer(modifier = Modifier.height(8.dp)) }
+
+            item {
+                Text("Today's Logs", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                if (habitState.movementHistory.value.isEmpty()) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier.fillMaxWidth().padding(24.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("No logs today yet", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                } else {
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            habitState.movementHistory.value.reversed().forEachIndexed { index, time ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                        Box(
+                                            modifier = Modifier.size(8.dp).background(MaterialTheme.colorScheme.secondary, CircleShape)
+                                        )
+                                        Text(time, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+                                    }
+                                    Text("Break Taken", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.Bold)
+                                }
+                                if (index < habitState.movementHistory.value.size - 1) {
+                                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                }
+                            }
                         }
                     }
                 }
@@ -198,6 +245,97 @@ fun MovementScreen(onNavigateBack: () -> Unit) {
                 }
             }
             
+            item { Spacer(modifier = Modifier.height(8.dp)) }
+
+            item {
+                Text("Active Hours", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    val context = androidx.compose.ui.platform.LocalContext.current
+                    val prefs = context.getSharedPreferences("app_prefs", android.content.Context.MODE_PRIVATE)
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Text(
+                            "Set the time window when you want to receive movement reminders.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Start Time", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                            Surface(
+                                modifier = Modifier.bounceClick(scaleDown = 0.9f) {
+                                    if (isEnabled) {
+                                        android.app.TimePickerDialog(context, { _, hour, min ->
+                                            val amPm = if (hour >= 12) "PM" else "AM"
+                                            val formattedHour = if (hour % 12 == 0) 12 else hour % 12
+                                            val formattedMin = String.format(java.util.Locale.US, "%02d", min)
+                                            val formattedTime = String.format(java.util.Locale.US, "%02d:%s %s", formattedHour, formattedMin, amPm)
+                                            habitState.movementStartTime.value = formattedTime
+                                            habitState.saveMovementTimes(prefs)
+                                        }, 8, 0, false).show()
+                                    }
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant
+                            ) {
+                                Text(
+                                    text = habitState.movementStartTime.value,
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("End Time", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                            Surface(
+                                modifier = Modifier.bounceClick(scaleDown = 0.9f) {
+                                    if (isEnabled) {
+                                        android.app.TimePickerDialog(context, { _, hour, min ->
+                                            val amPm = if (hour >= 12) "PM" else "AM"
+                                            val formattedHour = if (hour % 12 == 0) 12 else hour % 12
+                                            val formattedMin = String.format(java.util.Locale.US, "%02d", min)
+                                            val formattedTime = String.format(java.util.Locale.US, "%02d:%s %s", formattedHour, formattedMin, amPm)
+                                            habitState.movementEndTime.value = formattedTime
+                                            habitState.saveMovementTimes(prefs)
+                                        }, 22, 0, false).show()
+                                    }
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant
+                            ) {
+                                Text(
+                                    text = habitState.movementEndTime.value,
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
             item { Spacer(modifier = Modifier.height(40.dp)) }
         }
     }

@@ -16,12 +16,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.ui.components.LiquidGlassButton
+import com.example.ui.components.liquidGlass
 import com.example.ui.components.HabitProgressBar
 import com.example.ui.components.bounceClick
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HydrationScreen(onNavigateBack: () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val habitState = com.example.ui.state.LocalHabitState.current
     val totalGoalLiters = habitState.totalGoalLiters.floatValue
     val cupSizeMl = habitState.cupSizeMl.intValue
@@ -108,16 +111,31 @@ fun HydrationScreen(onNavigateBack: () -> Unit) {
                             Box(
                                 modifier = Modifier
                                     .background(MaterialTheme.colorScheme.surface, CircleShape)
-                                    .bounceClick(scaleDown = 0.8f) { if (habitState.currentWaterMl.intValue >= cupSizeMl) habitState.currentWaterMl.intValue -= cupSizeMl else habitState.currentWaterMl.intValue = 0 }
+                                    .bounceClick(scaleDown = 0.8f) { 
+                                        if (habitState.premiumDaysRemaining.intValue > 0) {
+                                            if (habitState.currentWaterMl.intValue >= cupSizeMl) {
+                                                habitState.currentWaterMl.intValue -= cupSizeMl 
+                                                habitState.removeWaterTimestamp(null)
+                                            } else {
+                                                habitState.currentWaterMl.intValue = 0
+                                            }
+                                        } else {
+                                            android.widget.Toast.makeText(context, "Premium required to edit activity.", android.widget.Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
                                     .padding(8.dp)
                             ) {
                                 Icon(Icons.Filled.Remove, "Remove cup", tint = MaterialTheme.colorScheme.primary)
                             }
-                            Button(
-                                onClick = { habitState.currentWaterMl.intValue += cupSizeMl },
-                                modifier = Modifier.bounceClick(scaleDown = 0.95f) {},
-                                shape = RoundedCornerShape(50),
-                                contentPadding = PaddingValues(horizontal = 32.dp, vertical = 12.dp)
+                            LiquidGlassButton(
+                                onClick = { 
+                                    if (habitState.premiumDaysRemaining.intValue > 0) {
+                                        habitState.currentWaterMl.intValue += cupSizeMl 
+                                        habitState.addWaterTimestamp(null)
+                                    } else {
+                                        android.widget.Toast.makeText(context, "Premium required to record activity.", android.widget.Toast.LENGTH_SHORT).show()
+                                    }
+                                }
                             ) {
                                 Icon(Icons.Filled.Add, "Add cup")
                                 Spacer(modifier = Modifier.width(8.dp))
@@ -155,6 +173,53 @@ fun HydrationScreen(onNavigateBack: () -> Unit) {
                                 color = if (diff >= 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
                                 fontWeight = FontWeight.Bold
                             )
+                        }
+                    }
+                }
+            }
+
+            item { Spacer(modifier = Modifier.height(8.dp)) }
+
+            item {
+                Text("Today's Logs", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                if (habitState.waterHistory.value.isEmpty()) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier.fillMaxWidth().padding(24.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("No logs today yet", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                } else {
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            habitState.waterHistory.value.reversed().forEachIndexed { index, time ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                        Box(
+                                            modifier = Modifier.size(8.dp).background(MaterialTheme.colorScheme.primary, CircleShape)
+                                        )
+                                        Text(time, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+                                    }
+                                    Text("+$cupSizeMl ml", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                                }
+                                if (index < habitState.waterHistory.value.size - 1) {
+                                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                }
+                            }
                         }
                     }
                 }

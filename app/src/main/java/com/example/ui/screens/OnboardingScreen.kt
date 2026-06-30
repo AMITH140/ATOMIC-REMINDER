@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.state.LocalUserProfile
 
+import com.example.ui.components.LiquidGlassButton
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -118,7 +119,7 @@ fun OnboardingScreen(onComplete: () -> Unit) {
 
             // Bottom Action
             Spacer(modifier = Modifier.height(32.dp))
-            Button(
+            LiquidGlassButton(
                 onClick = {
                     if (currentStep == 0) {
                         currentStep++
@@ -136,10 +137,7 @@ fun OnboardingScreen(onComplete: () -> Unit) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
-                shape = RoundedCornerShape(28.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary
-                )
+                shape = RoundedCornerShape(28.dp)
             ) {
                 Text(
                     text = if (currentStep == 2) "Get Started" else "Continue",

@@ -1,5 +1,7 @@
 package com.example.ui.screens
 
+import android.app.Activity
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -16,15 +18,59 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalContext
+import com.google.android.gms.ads.AdRequest
+import com.google.android.gms.ads.LoadAdError
+import com.google.android.gms.ads.rewarded.RewardedAd
+import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback
+import com.example.ui.components.LiquidGlassButton
+import com.example.ui.components.liquidGlass
 
 @Composable
 fun PremiumScreen() {
     val habitState = com.example.ui.state.LocalHabitState.current
-    var adsWatched by remember { mutableStateOf(3) }
+    var rewardedAd by remember { mutableStateOf<RewardedAd?>(null) }
+    var isLoadingAd by remember { mutableStateOf(false) }
+    
+    val context = LocalContext.current
+    var currentContext = context
+    var activity: Activity? = null
+    while (currentContext is android.content.ContextWrapper) {
+        if (currentContext is Activity) {
+            activity = currentContext
+            break
+        }
+        currentContext = currentContext.baseContext
+    }
+    
+    val adUnitId = "ca-app-pub-7414823704847076/4333226745" // User's Ad Unit ID
+    // For test: "ca-app-pub-3940256099942544/5224354917"
+
+    fun loadAd() {
+        if (rewardedAd != null || isLoadingAd) return
+        isLoadingAd = true
+        val adRequest = AdRequest.Builder().build()
+        RewardedAd.load(context, adUnitId, adRequest, object : RewardedAdLoadCallback() {
+            override fun onAdFailedToLoad(adError: LoadAdError) {
+                Log.d("AdMob", "Ad failed to load: ${adError.message}")
+                rewardedAd = null
+                isLoadingAd = false
+            }
+
+            override fun onAdLoaded(ad: RewardedAd) {
+                Log.d("AdMob", "Ad loaded")
+                rewardedAd = ad
+                isLoadingAd = false
+            }
+        })
+    }
+
+    LaunchedEffect(Unit) {
+        loadAd()
+    }
 
     val scrollState = rememberScrollState()
     Column(
@@ -35,25 +81,28 @@ fun PremiumScreen() {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
+        val daysLeft = habitState.premiumDaysRemaining.intValue
+        val isZero = daysLeft <= 0
+
         Surface(
-            color = MaterialTheme.colorScheme.secondaryContainer,
-            shape = RoundedCornerShape(50),
-            modifier = Modifier.padding(bottom = 24.dp)
+            modifier = Modifier.padding(bottom = 24.dp).liquidGlass(RoundedCornerShape(50)),
+            color = Color.Transparent,
+            shape = RoundedCornerShape(50)
         ) {
             Row(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.Filled.Schedule, contentDescription = null, tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(18.dp))
+                Icon(Icons.Filled.Schedule, contentDescription = null, tint = if (isZero) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("${habitState.premiumDaysRemaining.intValue} days remaining", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                Text("$daysLeft days remaining", style = MaterialTheme.typography.labelMedium, color = if (isZero) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSecondaryContainer)
             }
         }
         
         Text(
-            text = "Keep Your Streak\nAlive",
+            text = if (isZero) "Subscription\nExpired" else "Keep Your Streak\nAlive",
             style = MaterialTheme.typography.displayMedium,
-            color = MaterialTheme.colorScheme.primary,
+            color = if (isZero) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
             textAlign = TextAlign.Center
         )
         
@@ -82,7 +131,7 @@ fun PremiumScreen() {
                 Spacer(modifier = Modifier.height(16.dp))
                 
                 Text(
-                    text = "Watch 5 ads, earn 1 free day",
+                    text = "Watch 3 ads, earn 1 free day",
                     style = MaterialTheme.typography.headlineMedium,
                     textAlign = TextAlign.Center,
                     color = MaterialTheme.colorScheme.onSurface
@@ -100,8 +149,8 @@ fun PremiumScreen() {
                 Spacer(modifier = Modifier.height(24.dp))
                 
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    for (i in 1..5) {
-                        if (i <= adsWatched) {
+                    for (i in 1..3) {
+                        if (i <= habitState.adsWatched.intValue) {
                             Box(
                                 modifier = Modifier.size(48.dp).background(MaterialTheme.colorScheme.secondaryContainer, CircleShape),
                                 contentAlignment = Alignment.Center
@@ -118,31 +167,49 @@ fun PremiumScreen() {
                 
                 Spacer(modifier = Modifier.height(32.dp))
                 
-                Button(
-                    onClick = { 
-                        if (adsWatched < 5) {
-                            adsWatched++
-                            if (adsWatched == 5) {
-                                habitState.premiumDaysRemaining.intValue++
-                                adsWatched = 0
+                LiquidGlassButton(
+                    onClick = {
+                        if (rewardedAd != null && activity != null) {
+                            rewardedAd?.fullScreenContentCallback = object : com.google.android.gms.ads.FullScreenContentCallback() {
+                                override fun onAdDismissedFullScreenContent() {
+                                    rewardedAd = null
+                                    loadAd()
+                                }
+                                override fun onAdFailedToShowFullScreenContent(adError: com.google.android.gms.ads.AdError) {
+                                    rewardedAd = null
+                                }
                             }
-                        } 
+                            rewardedAd?.show(activity) { rewardItem ->
+                                // Reward granted
+                                habitState.adsWatched.intValue++
+                                if (habitState.adsWatched.intValue >= 3) {
+                                    habitState.premiumDaysRemaining.intValue++
+                                    habitState.adsWatched.intValue = 0
+                                }
+                                val prefs = context.getSharedPreferences("app_prefs", android.content.Context.MODE_PRIVATE)
+                                prefs.edit()
+                                    .putInt("ads_watched", habitState.adsWatched.intValue)
+                                    .putInt("premium_days", habitState.premiumDaysRemaining.intValue)
+                                    .apply()
+                            }
+                        } else if (rewardedAd == null && !isLoadingAd) {
+                            loadAd()
+                        }
                     },
                     modifier = Modifier.fillMaxWidth().height(56.dp),
                     shape = RoundedCornerShape(50),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    enabled = rewardedAd != null || !isLoadingAd
                 ) {
-                    Icon(Icons.Filled.Movie, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Watch an ad", style = MaterialTheme.typography.labelLarge)
+                    if (isLoadingAd) {
+                        CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(24.dp))
+                    } else {
+                        Icon(Icons.Filled.Movie, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(if (rewardedAd != null) "Watch an ad" else "Load Ad", style = MaterialTheme.typography.labelLarge)
+                    }
                 }
             }
         }
-        
-        Spacer(modifier = Modifier.height(32.dp))
-        
-        TextButton(onClick = { /*TODO*/ }) {
-            Text("Go lifetime — one-time purchase", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-        }
     }
 }
+

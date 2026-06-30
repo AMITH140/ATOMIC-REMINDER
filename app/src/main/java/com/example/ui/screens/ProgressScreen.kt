@@ -22,6 +22,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.ui.components.LiquidGlassButton
+import com.example.ui.components.liquidGlass
 import androidx.compose.ui.unit.sp
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -102,7 +104,8 @@ fun PeriodSelector(selectedPeriod: String, onPeriodSelected: (String) -> Unit) {
     val options = listOf("Week", "Month", "All time")
     
     Surface(
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        modifier = Modifier.liquidGlass(RoundedCornerShape(50)),
+        color = Color.Transparent,
         shape = RoundedCornerShape(50)
     ) {
         Row(modifier = Modifier.fillMaxWidth().padding(4.dp)) {
@@ -317,12 +320,13 @@ fun MonthlyHeatmap() {
                         } else {
                             val day = cellIndex - startOffset + 1
                             val heat = (day + currentMonth) % 5 // mock heat based on day and month
+                            val premiumColor = Color(0xFF00BFA5) // Teal accent
                             val color = when (heat) {
-                                4 -> MaterialTheme.colorScheme.secondary // Amber
-                                3 -> MaterialTheme.colorScheme.primary
-                                2 -> MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
-                                1 -> MaterialTheme.colorScheme.primaryContainer
-                                else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                4 -> premiumColor
+                                3 -> premiumColor.copy(alpha = 0.75f)
+                                2 -> premiumColor.copy(alpha = 0.5f)
+                                1 -> premiumColor.copy(alpha = 0.25f)
+                                else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
                             }
                             val isToday = day == 26 && displayMonthOffset == 0
                             Box(
@@ -331,7 +335,7 @@ fun MonthlyHeatmap() {
                                     .background(color, RoundedCornerShape(8.dp))
                                     .border(
                                         if (isToday) 2.dp else 0.dp,
-                                        if (isToday) MaterialTheme.colorScheme.primary else Color.Transparent,
+                                        if (isToday) Color.White else Color.Transparent,
                                         RoundedCornerShape(8.dp)
                                     )
                                     .clickable {
@@ -343,7 +347,7 @@ fun MonthlyHeatmap() {
                                 Text(
                                     text = day.toString(),
                                     style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp, fontWeight = FontWeight.Bold),
-                                    color = if (heat > 1) Color.White else MaterialTheme.colorScheme.onSurface
+                                    color = if (heat > 0) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
@@ -406,7 +410,7 @@ fun MonthlyHeatmap() {
                 
                 Spacer(modifier = Modifier.height(24.dp))
                 
-                Button(
+                LiquidGlassButton(
                     onClick = { showDayDetails = false },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)

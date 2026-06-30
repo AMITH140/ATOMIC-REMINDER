@@ -31,14 +31,18 @@ import androidx.compose.ui.unit.dp
 
 import androidx.compose.ui.graphics.Brush
 
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.automirrored.outlined.List
+
 sealed class Screen(val route: String, val title: String, val selectedIcon: ImageVector, val unselectedIcon: ImageVector) {
     object Dashboard : Screen("dashboard", "Dashboard", Icons.Filled.GridView, Icons.Outlined.GridView)
     object Focus : Screen("focus", "Morning Guard", Icons.Filled.Shield, Icons.Outlined.Shield)
     object Progress : Screen("progress", "Progress", Icons.Filled.Analytics, Icons.Outlined.Analytics)
     object Premium : Screen("premium", "Premium", Icons.Filled.WorkspacePremium, Icons.Outlined.WorkspacePremium)
+    object Todo : Screen("todo", "TO DO", Icons.AutoMirrored.Filled.List, Icons.AutoMirrored.Outlined.List)
 }
 
-val bottomNavItems = listOf(Screen.Dashboard, Screen.Focus, Screen.Progress, Screen.Premium)
+val bottomNavItems = listOf(Screen.Dashboard, Screen.Progress, Screen.Todo, Screen.Premium)
 
 @Composable
 fun BottomNavBar(
@@ -75,6 +79,7 @@ fun BottomNavBar(
         ) {
             bottomNavItems.forEach { screen ->
                 val selected = currentRoute == screen.route
+                val isPremiumEmpty = screen.route == Screen.Premium.route && habitState.premiumDaysRemaining.intValue <= 0
                 NavigationBarItem(
                     selected = selected,
                     onClick = { onNavigate(screen.route) },
@@ -83,8 +88,8 @@ fun BottomNavBar(
                             badge = {
                                 if (screen.route == Screen.Premium.route) {
                                     androidx.compose.material3.Badge(
-                                        containerColor = MaterialTheme.colorScheme.primary,
-                                        contentColor = MaterialTheme.colorScheme.onPrimary
+                                        containerColor = if (isPremiumEmpty) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                                        contentColor = if (isPremiumEmpty) MaterialTheme.colorScheme.onError else MaterialTheme.colorScheme.onPrimary
                                     ) {
                                         Text("${habitState.premiumDaysRemaining.intValue}")
                                     }
@@ -93,7 +98,8 @@ fun BottomNavBar(
                         ) {
                             Icon(
                                 imageVector = if (selected) screen.selectedIcon else screen.unselectedIcon,
-                                contentDescription = screen.title
+                                contentDescription = screen.title,
+                                tint = if (isPremiumEmpty && !selected) MaterialTheme.colorScheme.error.copy(alpha = 0.8f) else androidx.compose.material3.LocalContentColor.current
                             )
                         }
                     },
@@ -106,11 +112,11 @@ fun BottomNavBar(
                         ) 
                     },
                     colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = Color.White,
+                        selectedIconColor = if (isPremiumEmpty) MaterialTheme.colorScheme.error else Color.White,
                         unselectedIconColor = Color.White.copy(alpha = 0.7f),
-                        selectedTextColor = Color.White,
+                        selectedTextColor = if (isPremiumEmpty) MaterialTheme.colorScheme.error else Color.White,
                         unselectedTextColor = Color.White.copy(alpha = 0.7f),
-                        indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
+                        indicatorColor = if (isPremiumEmpty) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f) else MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
                     )
                 )
             }

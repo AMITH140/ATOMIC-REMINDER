@@ -9,11 +9,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.MusicVideo
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Sms
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.*
@@ -31,7 +33,7 @@ import androidx.compose.runtime.setValue
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FocusScreen() {
+fun FocusScreen(onNavigateBack: () -> Unit = {}) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val sharedPrefs = remember { context.getSharedPreferences("app_prefs", android.content.Context.MODE_PRIVATE) }
     
@@ -47,6 +49,42 @@ fun FocusScreen() {
     
     val packageManager = context.packageManager
     
+    var isUsageStatsEnabled by remember { 
+        mutableStateOf(
+            try {
+                val appOps = context.getSystemService(android.content.Context.APP_OPS_SERVICE) as android.app.AppOpsManager
+                val mode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                    appOps.unsafeCheckOpNoThrow(android.app.AppOpsManager.OPSTR_GET_USAGE_STATS, android.os.Process.myUid(), context.packageName)
+                } else {
+                    appOps.checkOpNoThrow(android.app.AppOpsManager.OPSTR_GET_USAGE_STATS, android.os.Process.myUid(), context.packageName)
+                }
+                mode == android.app.AppOpsManager.MODE_ALLOWED
+            } catch (e: Exception) { false }
+        ) 
+    }
+    var canDrawOverlays by remember { mutableStateOf(android.provider.Settings.canDrawOverlays(context)) }
+    
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                val appOps = context.getSystemService(android.content.Context.APP_OPS_SERVICE) as android.app.AppOpsManager
+                val mode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                    appOps.unsafeCheckOpNoThrow(android.app.AppOpsManager.OPSTR_GET_USAGE_STATS, android.os.Process.myUid(), context.packageName)
+                } else {
+                    appOps.checkOpNoThrow(android.app.AppOpsManager.OPSTR_GET_USAGE_STATS, android.os.Process.myUid(), context.packageName)
+                }
+                isUsageStatsEnabled = (mode == android.app.AppOpsManager.MODE_ALLOWED)
+                canDrawOverlays = android.provider.Settings.canDrawOverlays(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
     androidx.compose.runtime.LaunchedEffect(Unit) {
         val savedBlocked = sharedPrefs.getStringSet("blocked_packages", setOf()) ?: setOf()
         savedBlocked.forEach { packageName ->
@@ -110,13 +148,92 @@ fun FocusScreen() {
         )
     }
     
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(24.dp)
-    ) {
+    Scaffold(
+        containerColor = Color.Transparent,
+        topBar = {
+            TopAppBar(
+                title = { Text("Morning Guard") },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Transparent
+                )
+            )
+        }
+    ) { innerPadding ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(horizontal = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(24.dp)
+        ) {
         item { Spacer(modifier = Modifier.height(24.dp)) }
+        
+        if (!isUsageStatsEnabled) {
+            item {
+                Surface(
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            context.startActivity(android.content.Intent(android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS))
+                        }
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Filled.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.onErrorContainer)
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text("Usage Access Required", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onErrorContainer)
+                                Text("Tap here to enable Usage Access so App Blocker can work.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
+                            }
+                        }
+                        if (android.os.Build.VERSION.SDK_INT >= 33) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text("If it says 'Restricted Setting', go to device Settings → Apps → (This App) → tap the 3 dots in the top right → 'Allow restricted settings'. Then come back here.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+        
+        if (!canDrawOverlays) {
+            item {
+                Surface(
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            val intent = android.content.Intent(
+                                android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                android.net.Uri.parse("package:${context.packageName}")
+                            )
+                            context.startActivity(intent)
+                        }
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Filled.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.onErrorContainer)
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text("Overlay Permission Required", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onErrorContainer)
+                                Text("Tap here to enable Display Over Other Apps.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
+                            }
+                        }
+                        if (android.os.Build.VERSION.SDK_INT >= 33) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text("If it says 'Restricted Setting', go to device Settings → Apps → (This App) → tap the 3 dots in the top right → 'Allow restricted settings'. Then come back here.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
         
         item {
             Surface(
@@ -140,6 +257,11 @@ fun FocusScreen() {
                             onCheckedChange = { 
                                 morningGuardEnabled = it
                                 sharedPrefs.edit().putBoolean("morning_guard_enabled", it).apply()
+                                if (it) {
+                                    com.example.util.NotificationHelper.scheduleDailyReminder(context, 1001, "Morning Guard", "Your morning focus session has started.", morningStartTime)
+                                } else {
+                                    com.example.util.NotificationHelper.cancelReminder(context, 1001)
+                                }
                             },
                             colors = SwitchDefaults.colors(checkedThumbColor = MaterialTheme.colorScheme.onPrimary, checkedTrackColor = MaterialTheme.colorScheme.primary)
                         )
@@ -154,16 +276,19 @@ fun FocusScreen() {
                             OutlinedButton(onClick = { 
                                 val cal = java.util.Calendar.getInstance()
                                 android.app.TimePickerDialog(context, { _, hour, min ->
-                                    val formattedTime = String.format(java.util.Locale.getDefault(), "%02d:%02d %s", if (hour % 12 == 0) 12 else hour % 12, min, if (hour < 12) "AM" else "PM")
+                                    val formattedTime = String.format(java.util.Locale.US, "%02d:%02d %s", if (hour % 12 == 0) 12 else hour % 12, min, if (hour < 12) "AM" else "PM")
                                     morningStartTime = formattedTime
                                     sharedPrefs.edit().putString("morning_start", formattedTime).apply()
+                                    if (morningGuardEnabled) {
+                                        com.example.util.NotificationHelper.scheduleDailyReminder(context, 1001, "Morning Guard", "Your morning focus session has started.", formattedTime)
+                                    }
                                 }, cal.get(java.util.Calendar.HOUR_OF_DAY), cal.get(java.util.Calendar.MINUTE), false).show()
                             }) { Text(morningStartTime) }
                             Text("to", modifier = Modifier.padding(top = 12.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                             OutlinedButton(onClick = { 
                                 val cal = java.util.Calendar.getInstance()
                                 android.app.TimePickerDialog(context, { _, hour, min ->
-                                    val formattedTime = String.format(java.util.Locale.getDefault(), "%02d:%02d %s", if (hour % 12 == 0) 12 else hour % 12, min, if (hour < 12) "AM" else "PM")
+                                    val formattedTime = String.format(java.util.Locale.US, "%02d:%02d %s", if (hour % 12 == 0) 12 else hour % 12, min, if (hour < 12) "AM" else "PM")
                                     morningEndTime = formattedTime
                                     sharedPrefs.edit().putString("morning_end", formattedTime).apply()
                                 }, cal.get(java.util.Calendar.HOUR_OF_DAY), cal.get(java.util.Calendar.MINUTE), false).show()
@@ -196,6 +321,11 @@ fun FocusScreen() {
                             onCheckedChange = { 
                                 eveningGuardEnabled = it
                                 sharedPrefs.edit().putBoolean("evening_guard_enabled", it).apply()
+                                if (it) {
+                                    com.example.util.NotificationHelper.scheduleDailyReminder(context, 1002, "Evening Guard", "Your evening wind-down session has started.", eveningStartTime)
+                                } else {
+                                    com.example.util.NotificationHelper.cancelReminder(context, 1002)
+                                }
                             },
                             colors = SwitchDefaults.colors(checkedThumbColor = MaterialTheme.colorScheme.onSecondary, checkedTrackColor = MaterialTheme.colorScheme.secondary)
                         )
@@ -210,16 +340,19 @@ fun FocusScreen() {
                             OutlinedButton(onClick = { 
                                 val cal = java.util.Calendar.getInstance()
                                 android.app.TimePickerDialog(context, { _, hour, min ->
-                                    val formattedTime = String.format(java.util.Locale.getDefault(), "%02d:%02d %s", if (hour % 12 == 0) 12 else hour % 12, min, if (hour < 12) "AM" else "PM")
+                                    val formattedTime = String.format(java.util.Locale.US, "%02d:%02d %s", if (hour % 12 == 0) 12 else hour % 12, min, if (hour < 12) "AM" else "PM")
                                     eveningStartTime = formattedTime
                                     sharedPrefs.edit().putString("evening_start", formattedTime).apply()
+                                    if (eveningGuardEnabled) {
+                                        com.example.util.NotificationHelper.scheduleDailyReminder(context, 1002, "Evening Guard", "Your evening wind-down session has started.", formattedTime)
+                                    }
                                 }, cal.get(java.util.Calendar.HOUR_OF_DAY), cal.get(java.util.Calendar.MINUTE), false).show()
                             }) { Text(eveningStartTime) }
                             Text("to", modifier = Modifier.padding(top = 12.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                             OutlinedButton(onClick = { 
                                 val cal = java.util.Calendar.getInstance()
                                 android.app.TimePickerDialog(context, { _, hour, min ->
-                                    val formattedTime = String.format(java.util.Locale.getDefault(), "%02d:%02d %s", if (hour % 12 == 0) 12 else hour % 12, min, if (hour < 12) "AM" else "PM")
+                                    val formattedTime = String.format(java.util.Locale.US, "%02d:%02d %s", if (hour % 12 == 0) 12 else hour % 12, min, if (hour < 12) "AM" else "PM")
                                     eveningEndTime = formattedTime
                                     sharedPrefs.edit().putString("evening_end", formattedTime).apply()
                                 }, cal.get(java.util.Calendar.HOUR_OF_DAY), cal.get(java.util.Calendar.MINUTE), false).show()
@@ -333,6 +466,7 @@ fun FocusScreen() {
         }
         
         item { Spacer(modifier = Modifier.height(80.dp)) }
+    }
     }
 }
 
