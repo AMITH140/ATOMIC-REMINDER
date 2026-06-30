@@ -46,11 +46,11 @@ class AppBlockerService : Service() {
             val usageStatsManager = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
             var lastBlockedApp: String? = null
             var lastBlockTime: Long = 0
+            var lastEventTime = System.currentTimeMillis() - 1000
             
             while (isRunning) {
                 val time = System.currentTimeMillis()
-                // Use a sliding window of the last 10 seconds to catch recent app launches reliably
-                val events = usageStatsManager.queryEvents(time - 10000, time)
+                val events = usageStatsManager.queryEvents(lastEventTime, time)
                 val event = android.app.usage.UsageEvents.Event()
                 var currentForegroundApp: String? = null
                 
@@ -58,58 +58,60 @@ class AppBlockerService : Service() {
                     events.getNextEvent(event)
                     if (event.eventType == android.app.usage.UsageEvents.Event.ACTIVITY_RESUMED) {
                         currentForegroundApp = event.packageName
-                    }
-                }
-                
-                if (currentForegroundApp == null) {
-                    // Fallback to queryUsageStats if no events found recently
-                    val stats = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, time - 10000, time)
-                    if (stats != null && stats.isNotEmpty()) {
-                        val sortedStats = stats.sortedByDescending { it.lastTimeUsed }
-                        currentForegroundApp = sortedStats.firstOrNull()?.packageName
+                        lastEventTime = event.timeStamp
                     }
                 }
                 
                 if (currentForegroundApp != null && currentForegroundApp != packageName) {
                     val blockResult = checkAndBlockApp(currentForegroundApp)
                     if (blockResult != null) {
-                        // Prevent spamming intents if we just blocked this app
                         if (currentForegroundApp != lastBlockedApp || (time - lastBlockTime) > 3000) {
                             lastBlockedApp = currentForegroundApp
                             lastBlockTime = time
                             
-                            // Go to home screen to force push the blocked app to background
                             val homeIntent = Intent(Intent.ACTION_MAIN).apply {
                                 addCategory(Intent.CATEGORY_HOME)
                                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
                             }
                             startActivity(homeIntent)
                             
-                            // Show a quick toast to notify the user
-                            withContext(Dispatchers.Main) {
-                                android.widget.Toast.makeText(
-                                    this@AppBlockerService, 
-                                    "App blocked by Focus Guard", 
-                                    android.widget.Toast.LENGTH_SHORT
-                                ).show()
+                            val blockedIntent = Intent(this@AppBlockerService, com.example.ui.screens.BlockedActivity::class.java).apply {
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                                putExtra("BLOCKED_APP", currentForegroundApp)
+                                putExtra("GUARD_TYPE", blockResult.first)
+                                putExtra("guard_end_time", blockResult.second)
                             }
+                            startActivity(blockedIntent)
                         }
                     } else {
-                        // Not blocked, clear the last blocked state
                         if (currentForegroundApp != lastBlockedApp) {
                             lastBlockedApp = null
                         }
                     }
                 }
                 
-                delay(300)
+                if (time > lastEventTime) {
+                    lastEventTime = time
+                }
+                
+                delay(750)
             }
         }
     }
 
+    private var cachedBlockedApps: Set<String>? = null
+    private var lastCacheTime: Long = 0
+
     private fun checkAndBlockApp(topPackage: String): Pair<String, String>? {
         val sharedPrefs = getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-        val blockedApps = sharedPrefs.getStringSet("blocked_packages", emptySet()) ?: emptySet()
+        val currentTime = System.currentTimeMillis()
+        
+        if (cachedBlockedApps == null || currentTime - lastCacheTime > 5000) {
+            cachedBlockedApps = sharedPrefs.getStringSet("blocked_packages", emptySet())
+            lastCacheTime = currentTime
+        }
+        
+        val blockedApps = cachedBlockedApps ?: emptySet()
         
         if (blockedApps.contains(topPackage)) {
             var isCurrentlyGuarded = false
@@ -134,13 +136,15 @@ class AppBlockerService : Service() {
                 val currentTimeInMinutes = currentHour * 60 + currentMin
                 
                 fun parseTime(timeStr: String): Int {
-                    val isPM = timeStr.contains("PM")
-                    val parts = timeStr.replace(" AM", "").replace(" PM", "").split(":")
+                    if (timeStr.length < 5) return 0
+                    val isPM = timeStr.endsWith("PM")
+                    val parts = timeStr.substring(0, 5).trim().split(":")
                     if (parts.size < 2) return 0
-                    var hour = parts[0].toInt()
+                    var hour = parts[0].toIntOrNull() ?: 0
+                    val minute = parts[1].toIntOrNull() ?: 0
                     if (isPM && hour != 12) hour += 12
                     if (!isPM && hour == 12) hour = 0
-                    return hour * 60 + parts[1].toInt()
+                    return hour * 60 + minute
                 }
                 
                 val mStart = parseTime(morningStartStr)
